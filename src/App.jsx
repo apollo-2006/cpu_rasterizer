@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // ============================================================================
 // 1. RAW 3D MATH ENGINE (No external libraries)
@@ -240,7 +240,9 @@ class SoftwareRasterizer {
 // ============================================================================
 // 3. REACT COMPONENT & RENDER LOOP
 // ============================================================================
-export default function HardwareRasterizer() {
+// Named for what it is: every pixel here is computed on the CPU. The canvas is
+// only a place to blit the finished framebuffer to.
+export default function SoftwareRasterizerDemo() {
   const canvasRef = useRef(null);
   const [stats, setStats] = useState({ fps: 0, ms: 0, tris: 0 });
   const [wireframe, setWireframe] = useState(false);
@@ -261,6 +263,11 @@ export default function HardwareRasterizer() {
     let frameCount = 0;          // was referenced but never declared
     let animationFrameId;
     let lastTime = performance.now();
+    // A single frame's delta swings wildly between vsync boundaries, so the
+    // readout used to flicker between values like 58 and 240. Average over a
+    // short window instead.
+    const frameTimes = [];
+    const FRAME_SAMPLE = 30;
     const matProj = Mat4x4.makeProjection(90.0, RENDER_HEIGHT / RENDER_WIDTH, 0.1, 1000.0);
 
     const renderLoop = (currentTime) => {
@@ -344,10 +351,14 @@ export default function HardwareRasterizer() {
       const imgData = new ImageData(rasterizer.colorBuffer, RENDER_WIDTH, RENDER_HEIGHT);
       ctx.putImageData(imgData, 0, 0);
 
+      frameTimes.push(dt);
+      if (frameTimes.length > FRAME_SAMPLE) frameTimes.shift();
+
       if (frameCount % 10 === 0) {
+        const meanDt = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
         setStats({
-          fps: Math.round(1000 / dt),
-          ms: Math.round(dt),
+          fps: Math.round(1000 / meanDt),
+          ms: Math.round(meanDt),
           tris: trianglesToRasterize.length,
         });
       }
